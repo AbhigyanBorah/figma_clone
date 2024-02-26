@@ -115,12 +115,12 @@ export const handleKeyDown = ({
   }
 
   // check if the key pressed is ctrl/cmd + z (undo)
-  if ((e?.ctrlKey || e?.metaKey) && e.keyCode === 90) {
+  if ((e?.ctrlKey || e?.metaKey) && e.key === "z") {
     undo();
   }
 
   // check if the key pressed is ctrl/cmd + y (redo)
-  if ((e?.ctrlKey || e?.metaKey) && e.keyCode === 89) {
+  if ((e?.ctrlKey || e?.metaKey) && e.key === "y") {
     redo();
   }
 

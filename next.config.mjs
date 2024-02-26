@@ -1,3 +1,6 @@
+import next from 'next';
+const {NextConfig} = next;
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
     images: {
@@ -5,27 +8,22 @@ const nextConfig = {
             {
                 protocol: 'https',
                 hostname: 'liveblocks.io',
-                port: ''
-            }
-        ]
+                port: '',
+            },
+        ],
     },
 
-    // webpack: (config, {isServer}) => {
-    //     // Add a rule to handle binary files
-    //     config.module.rules.push({
-    //         test: /\.(woff|woff2|eot|ttf|otf|png|jpe?g|gif|webp|node)$/i,
-    //         loader: 'file-loader',
-    //         options: {
-    //             publicPath: '/_next',
-    //             name: 'static/media/[name].[hash].[ext]',
-    //         },
-    //     });
-
-    //     // Return the modified config
-    //     return config;
-    // },
     webpack: (config) => {config.externals.push({sharp: 'commonjs sharp', canvas: 'commonjs canvas'}); return config;}
 
+    // webpack: (config, {isServer}) => {
+    //     if (!isServer) {
+    //         config.module.rules.push({
+    //             test: /\.node$/,
+    //             use: 'node-loader',
+    //         });
+    //     }
+    //     return config;
+    // },
 };
 
 export default nextConfig;

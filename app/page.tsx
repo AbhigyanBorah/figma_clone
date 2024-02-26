@@ -1,33 +1,58 @@
 "use client";
-import { fabric } from "fabric";
+
 import LeftSidebar from "@/components/LeftSidebar";
 import Live from "@/components/Live";
 import Navbar from "@/components/Navbar";
 import RightSidebar from "@/components/RightSidebar";
-import { useEffect, useRef, useState } from "react";
+import { defaultNavElement } from "@/constants";
 import {
   handleCanvasMouseDown,
   handleCanvasMouseMove,
   handleCanvasMouseUp,
   handleCanvasObjectModified,
+  handleCanvasObjectScaling,
+  handleCanvasSelectionCreated,
   handleResize,
   initializeFabric,
   renderCanvas,
 } from "@/lib/canvas";
-import { ActiveElement } from "@/types/type";
-import { useMutation, useStorage } from "@/liveblocks.config";
-import { defaultNavElement } from "@/constants";
-import { handleDelete } from "@/lib/key-events";
+import { handleDelete, handleKeyDown } from "@/lib/key-events";
+import { handleImageUpload } from "@/lib/shapes";
+import { useMutation, useRedo, useStorage, useUndo } from "@/liveblocks.config";
+import { ActiveElement, Attributes } from "@/types/type";
+import { fabric } from "fabric";
+import { useEffect, useRef, useState } from "react";
 
 export default function Page() {
+  const undo = useUndo();
+  const redo = useRedo();
+
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fabricRef = useRef<fabric.Canvas | null>(null);
   const isDrawing = useRef(false);
   const shapeRef = useRef<fabric.Object | null>(null);
   const selectedShapeRef = useRef<string | null>(null);
   const activeObjectRef = useRef<fabric.Object | null>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
+  const isEditingRef = useRef(false);
 
   const canvasObjects = useStorage((root) => root.canvasObjects);
+
+  const [elementAttributes, setElementAttributes] = useState<Attributes>({
+    width: "",
+    height: "",
+    fontSize: "",
+    fontFamily: "",
+    fontWeight: "",
+    fill: "#aabbcc",
+    stroke: "#aabbcc",
+  });
+
+  const [activeElement, setActiveElement] = useState<ActiveElement>({
+    name: "",
+    value: "",
+    icon: "",
+  });
 
   const syncShapeInStorage = useMutation(({ storage }, object) => {
     if (!object) return;
@@ -42,12 +67,6 @@ export default function Page() {
     canvasObjects.set(objectId, shapeData);
   }, []);
 
-  const [activeElement, setActiveElement] = useState<ActiveElement>({
-    name: "",
-    value: "",
-    icon: "",
-  });
-
   const deleteAllShapes = useMutation(({ storage }) => {
     const canvasObjects = storage.get("canvasObjects");
 
@@ -55,9 +74,9 @@ export default function Page() {
 
     for (const [key, value] of canvasObjects.entries()) {
       canvasObjects.delete(key);
-
-      return canvasObjects.size === 0;
     }
+
+    return canvasObjects.size === 0;
   }, []);
 
   const deleteShapeFromStorage = useMutation(({ storage }, objectId) => {
@@ -79,7 +98,19 @@ export default function Page() {
       case "delete":
         handleDelete(fabricRef.current as any, deleteShapeFromStorage);
         setActiveElement(defaultNavElement);
+        break;
+
+      case "image":
+        imageInputRef.current?.click();
+        isDrawing.current = false;
+
+        if (fabricRef.current) {
+          fabricRef.current.isDrawingMode = false;
+        }
+        break;
+
       default:
+        selectedShapeRef.current = elem?.value as string;
         break;
     }
 
@@ -93,8 +124,8 @@ export default function Page() {
       handleCanvasMouseDown({
         options,
         canvas,
-        isDrawing,
         selectedShapeRef,
+        isDrawing,
         shapeRef,
       });
     });
@@ -116,9 +147,9 @@ export default function Page() {
         isDrawing,
         selectedShapeRef,
         shapeRef,
+        activeObjectRef,
         syncShapeInStorage,
         setActiveElement,
-        activeObjectRef,
       });
     });
 
@@ -129,14 +160,58 @@ export default function Page() {
       });
     });
 
+    canvas.on("selection:created", (options: any) => {
+      handleCanvasSelectionCreated({
+        isEditingRef,
+        options,
+        setElementAttributes,
+      });
+    });
+
+    canvas.on("object:scaling", (options: any) => {
+      handleCanvasObjectScaling({
+        options,
+        setElementAttributes,
+      });
+    });
+
     window.addEventListener("resize", () => {
       handleResize({ canvas: fabricRef.current });
     });
 
+    window.addEventListener("keydown", (e: any) => {
+      handleKeyDown({
+        e,
+        canvas: fabricRef.current,
+        undo,
+        redo,
+        syncShapeInStorage,
+        deleteShapeFromStorage,
+      });
+    });
+
     return () => {
       canvas.dispose();
+
+      // remove the event listeners
+      window.removeEventListener("resize", () => {
+        handleResize({
+          canvas: null,
+        });
+      });
+
+      window.removeEventListener("keydown", (e) =>
+        handleKeyDown({
+          e,
+          canvas: fabricRef.current,
+          undo,
+          redo,
+          syncShapeInStorage,
+          deleteShapeFromStorage,
+        })
+      );
     };
-  }, []);
+  }, [canvasRef]);
 
   useEffect(() => {
     renderCanvas({
@@ -151,11 +226,29 @@ export default function Page() {
       <Navbar
         activeElement={activeElement}
         handleActiveElement={handleActiveElement}
+        imageInputRef={imageInputRef}
+        handleImageUpload={(e: any) => {
+          e.stopPropagation();
+
+          handleImageUpload({
+            file: e.target.files[0],
+            canvas: fabricRef as any,
+            shapeRef,
+            syncShapeInStorage,
+          });
+        }}
       />
       <section className="flex h-full flex-row">
-        <LeftSidebar />
+        <LeftSidebar allShapes={Array.from(canvasObjects)} />
         <Live canvasRef={canvasRef} />
-        <RightSidebar />
+        <RightSidebar
+          elementAttributes={elementAttributes}
+          setElementAttributes={setElementAttributes}
+          fabricRef={fabricRef}
+          isEditingRef={isEditingRef}
+          activeObjectRef={activeObjectRef}
+          syncShapeInStorage={syncShapeInStorage}
+        />
       </section>
     </main>
   );
